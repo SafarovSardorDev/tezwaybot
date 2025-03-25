@@ -1,0 +1,16 @@
+{
+    "Andijon": ["Andijon shahri", "Asaka", "Baliqchi", "Bo'z", "Buloqboshi", "Izboskan", "Jalaquduq", "Marhamat", "Oltinko'l", "Paxtaobod", "Shahrixon", "Ulug'nor", "Xo'jaobod"],
+    "Buxoro": ["Buxoro shahri", "Buxoro tumani", "G'ijduvon", "Jondor", "Kogon", "Olot", "Peshku", "Qorako'l", "Qorovulbozor", "Romitan", "Shofirkon", "Vobkent"],
+    "Farg'ona": ["Farg'ona shahri", "Bag'dod", "Beshariq", "Buvayda", "Dang'ara", "Furqat", "Qo'shtepa", "Quva", "Rishton", "So'x", "Toshloq", "Uchko'prik", "Yozyovon"],
+    "Toshkent": ["Toshkent shahri", "Bekobod", "Bo'ka", "Chinoz", "Ohangaron", "Parkent", "Piskent", "Oqqo'rg'on", "Yangiyo'l", "Zangiota"],
+    "Qashqadaryo": ["Qarshi shahri", "Chiroqchi", "Dehqonobod", "G'uzor", "Kasbi", "Kitob", "Koson", "Mirishkor", "Muborak", "Nishon", "Shahrisabz", "Yakkabog'"],
+    "Samarqand": ["Samarqand shahri", "Bulung'ur", "Ishtixon", "Jomboy", "Kattaqo'rg'on", "Narpay", "Nurobod", "Oqdaryo", "Pastdarg'om", "Paxtachi", "Payariq", "Toyloq", "Urgut"],
+    "Surxondaryo": ["Termiz shahri", "Angor", "Boysun", "Denov", "Jarqo'rg'on", "Muzrabot", "Oltinsoy", "Qiziriq", "Sherobod", "Sho'rchi", "Sariosiyo", "Uzun"],
+    "Xorazm": ["Urganch shahri", "Bog'ot", "Gurlan", "Hazorasp", "Khiva", "Shovot", "Tuproqqala", "Xonqa", "Yangiariq", "Yangibozor"],
+    "Navoiy": ["Navoiy shahri", "Karmana", "Qiziltepa", "Navbahor", "Tomdi", "Uchquduq", "Xatirchi", "Zarafshon"],
+    "Namangan": ["Namangan shahri", "Chortoq", "Chust", "Kosonsoy", "Mingbuloq", "Norin", "Pop", "To'raqo'rg'on", "Uchqo'rg'on", "Uychi", "Yangiqo'rg'on"],
+    "Jizzax": ["Jizzax shahri", "Arnasoy", "Baxmal", "Do‘stlik", "Forish", "G‘allaorol", "Mirzacho‘l", "Paxtakor", "Yangiobod", "Zomin", "Zafarobod", "Zarbdor"],
+    "Sirdaryo": ["Guliston shahri", "Boyovut", "Mirzaobod", "Oqoltin", "Sardoba", "Sayxunobod", "Sirdaryo", "Xovos"],
+    "Qoraqalpog'iston": ["Nukus shahri", "Amudaryo", "Beruniy", "Chimboy", "Ellikqal'a", "Kegeyli", "Mo'ynoq", "Qanliko'l", "Qo'ng'irot", "Shumanay", "Taxiatosh", "To'rtko'l", "Xo'jayli"]
+  }
+  

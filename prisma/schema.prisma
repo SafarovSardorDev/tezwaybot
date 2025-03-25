@@ -1,0 +1,58 @@
+datasource db {
+    provider = "postgresql"
+    url      = env("DATABASE_URL")
+}
+
+generator client {
+    provider        = "prisma-client-py"
+    previewFeatures = ["prismaSchemaFolder"]
+}
+
+enum Role {
+  SUPER_ADMIN
+  ADMIN
+  DRIVER
+  PASSENGER
+}
+
+model User {
+  id          Int       @id @default(autoincrement())
+  firstName   String
+  lastName    String
+  telegramId  BigInt    @unique  // Katta raqamlar uchun BigInt
+  phoneNumber String
+  username    String?
+  role        Role      @default(PASSENGER)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  passengerOrders Order[] @relation("PassengerOrders")
+  driverOrders    Order[] @relation("DriverOrders")
+}
+
+model Order {
+  id           Int      @id @default(autoincrement())
+  passengerId  Int
+  driverId     Int?
+  fromRegion   String
+  fromDistrict String
+  toRegion     String
+  toDistrict   String
+  passengers   Int
+  departureTime DateTime
+  status       OrderStatus @default(NEW)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  
+  passenger    User     @relation("PassengerOrders", fields: [passengerId], references: [id])
+  driver       User?    @relation("DriverOrders", fields: [driverId], references: [id])
+}
+
+enum OrderStatus {
+  NEW
+  ACCEPTED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  REJECTED
+}
