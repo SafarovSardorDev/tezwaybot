@@ -54,31 +54,41 @@ async def ask_passengers(callback_query: types.CallbackQuery, state: FSMContext)
 @dp.callback_query_handler(lambda c: c.data.startswith("passengers_"), state=OrderState.passengers)
 async def set_passengers(callback_query: types.CallbackQuery, state: FSMContext):
     passengers = int(callback_query.data.split("_")[1])
+    user_data = await state.get_data()
+    from_region = user_data.get("from_region")  # User tanlagan viloyat
+
     await state.update_data(passengers=passengers)
-    
+
     keyboard = InlineKeyboardMarkup(row_width=2)
     for region in regions.keys():
-        keyboard.insert(InlineKeyboardButton(text=region, callback_data=f"to_{region}"))
+        if region != from_region:  # from_regionni chiqarib tashlaymiz
+            keyboard.insert(InlineKeyboardButton(text=region, callback_data=f"to_{region}"))
 
     await callback_query.message.edit_text(
         f"👥 Passajirlar soni: {passengers}\n\n"
-        "Qaysi viloyatga borasiz?", 
+        "Qaysi viloyatga borasiz?",  
         reply_markup=keyboard
     )
     await OrderState.to_region.set()
+
 
 # 📍 Boriladigan viloyatni tanlash
 @dp.callback_query_handler(lambda c: c.data.startswith("to_"), state=OrderState.to_region)
 async def select_to_district(callback_query: types.CallbackQuery, state: FSMContext):
     viloyat = callback_query.data.split("_")[1]
+    user_data = await state.get_data()
+    from_district = user_data.get("from_district")  # User tanlagan tuman
+    
     await state.update_data(to_region=viloyat)
 
     keyboard = InlineKeyboardMarkup(row_width=2)
     for district in regions[viloyat]:
-        keyboard.insert(InlineKeyboardButton(text=district, callback_data=f"to_district_{district}"))
+        if district != from_district:  # from_districtni chiqarib tashlaymiz
+            keyboard.insert(InlineKeyboardButton(text=district, callback_data=f"to_district_{district}"))
 
     await callback_query.message.edit_text(f"{viloyat} viloyati, qaysi tumanga borasiz?", reply_markup=keyboard)
     await OrderState.to_district.set()
+
 
 # 📅 Sana va vaqtni so'rash
 @dp.callback_query_handler(lambda c: c.data.startswith("to_district_"), state=OrderState.to_district)
@@ -108,55 +118,41 @@ async def process_date(callback_query: types.CallbackQuery, state: FSMContext):
     selected_date = callback_query.data.split("_")[1]
     await state.update_data(departure_date=selected_date)
     
-    keyboard = InlineKeyboardMarkup(row_width=3)
-    for hour in range(8, 23, 2):  # 8:00 dan 22:00 gacha har 2 soatda
-        keyboard.insert(InlineKeyboardButton(text=f"{hour}:00", callback_data=f"time_{hour}:00"))
-    
-    await callback_query.message.edit_text("⏰ Jo'natish vaqtini tanlang:", reply_markup=keyboard)
+    await callback_query.message.edit_text("⏰ Jo'natish vaqtini HH:MM formatida kiriting (masalan, 14:30):")
+    await OrderState.time.set()
 
-# 📝 Sana kiritish (qo'lda yozish)
-@dp.message_handler(state=OrderState.datetime)
-async def process_text_datetime(message: types.Message, state: FSMContext):
+# ⏱ Qo‘lda vaqt kiritish
+@dp.message_handler(state=OrderState.time)
+async def process_manual_time(message: types.Message, state: FSMContext):
     try:
-        # Sana formatini tekshirish
-        datetime.strptime(message.text, "%Y-%m-%d")
-        await state.update_data(departure_date=message.text)
-        
-        keyboard = InlineKeyboardMarkup(row_width=3)
-        for hour in range(8, 23, 2):
-            keyboard.insert(InlineKeyboardButton(text=f"{hour}:00", callback_data=f"time_{hour}:00"))
-        
-        await message.answer("⏰ Jo'natish vaqtini tanlang:", reply_markup=keyboard)
+        datetime.strptime(message.text, "%H:%M")  # Vaqt formatini tekshirish
+        user_data = await state.get_data()
+        departure_datetime = f"{user_data['departure_date']} {message.text}"
+        await update_order_and_confirm(message, state, departure_datetime)
     except ValueError:
-        await message.answer("❌ Noto'g'ri format. Iltimos, YYYY-MM-DD formatida kiriting yoki tugmalardan birini tanlang.")
+        await message.answer("❌ Noto'g'ri format. Iltimos, vaqtni HH:MM formatida kiriting (masalan, 14:30).")
 
-# ⏱ Vaqtni tanlash
-@dp.callback_query_handler(lambda c: c.data.startswith("time_"), state=OrderState.datetime)
-async def process_departure_time(callback_query: types.CallbackQuery, state: FSMContext):
-    selected_time = callback_query.data.split("_")[1]
-    user_data = await state.get_data()
-    departure_datetime = f"{user_data['departure_date']} {selected_time}"
-    
+async def update_order_and_confirm(message, state, departure_datetime):
+    """ Buyurtmani shakllantirish va tasdiqlash bosqichiga o'tkazish """
     await state.update_data(departure_time=departure_datetime)
-    
-    # Buyurtma ma'lumotlarini tayyorlash
+    user_data = await state.get_data()
+
     order_info = (
         f"📋 Buyurtma ma'lumotlari:\n"
         f"📍 Yo'nalish: {user_data['from_region']}, {user_data['from_district']} -> "
         f"{user_data['to_region']}, {user_data['to_district']}\n"
         f"👥 Passajirlar soni: {user_data['passengers']}\n"
-        f"⏰ Jo'natish vaqti: {departure_datetime}\n\n"
+        f"⏰ Jo'nash vaqti: {departure_datetime}\n\n"
         f"Ma'lumotlar to'g'rimi?"
     )
-    
-    # Tasdiqlash tugmalari
+
     keyboard = InlineKeyboardMarkup()
     keyboard.row(
         InlineKeyboardButton("✅ Tasdiqlash", callback_data="confirm_order"),
         InlineKeyboardButton("❌ Bekor qilish", callback_data="cancel_order")
     )
-    
-    await callback_query.message.edit_text(order_info, reply_markup=keyboard)
+
+    await message.answer(order_info, reply_markup=keyboard)
     await OrderState.confirmation.set()
 
 # ✅ Buyurtmani tasdiqlash

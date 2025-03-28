@@ -239,8 +239,8 @@ async def show_profile(message: types.Message):
         profile_text = (
             f"👤 Ism: {user.firstName}\n"
             f"👤 Familiya: {user.lastName}\n"
-            f"📱 Telefon: {user.phoneNumber}\n"
-            f"""🔑 Rol: {"Haydovchi" if user.role == "DRIVER" else "Yo'lovchi"}\n"""
+            f"📱 Telefon: +{user.phoneNumber}\n"
+            # f"""🔑 Rol: {"Haydovchi" if user.role == "DRIVER" else "Yo'lovchi"}\n"""
             f"📅 Ro'yxatdan o'tilgan sana: {user.createdAt.strftime('%d.%m.%Y')}"
         )
         await message.answer(profile_text)

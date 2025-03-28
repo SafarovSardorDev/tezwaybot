@@ -13,4 +13,5 @@ class OrderState(StatesGroup):
     to_region = State()
     to_district = State()
     datetime = State()
+    time = State()
     confirmation = State()
