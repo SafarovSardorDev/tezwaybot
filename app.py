@@ -3,7 +3,7 @@ from loader import dp, db
 import middlewares, filters, handlers
 from utils.notify_admins import on_startup_notify
 from utils.set_bot_commands import set_default_commands
-from utils.notifications import notify_drivers_about_order
+
 
 async def on_startup(dispatcher):
     """Bot ishga tushganda Prisma client’ni bog‘lash"""
@@ -16,4 +16,5 @@ async def on_shutdown(dispatcher):
     await db.disconnect()  # **Bot o‘chirilganda ulanish uziladi**
 
 if __name__ == '__main__':
-    executor.start_polling(dp, on_startup=on_startup, on_shutdown=on_shutdown)
+    executor.start_polling(dp, on_startup=on_startup, on_shutdown=on_shutdown, skip_updates=True)
+

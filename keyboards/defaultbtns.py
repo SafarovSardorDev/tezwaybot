@@ -1,24 +1,28 @@
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
 
-# Klaviaturalar
 def get_role_keyboard():
-    keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
+    """Rol tanlash uchun klaviatura"""
+    keyboard = ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
     keyboard.add(KeyboardButton("Haydovchi"), KeyboardButton("Yo'lovchi"))
     return keyboard
 
 def get_phone_keyboard():
-    keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
-    keyboard.add(KeyboardButton(text="Telefon raqamni yuborish", request_contact=True))
-    return keyboard
-
-def get_passenger_keyboard():
-    keyboard = ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
-    buttons = ["Yo'lga otlanish", "Profilim", "Buyurtma tarixi", "Foydalanish qo'llanmasi"]
-    keyboard.add(*[KeyboardButton(text) for text in buttons])
+    """Telefon raqamni jo'natish uchun klaviatura"""
+    keyboard = ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
+    keyboard.add(KeyboardButton("Telefon raqamni jo'natish", request_contact=True))
     return keyboard
 
 def get_driver_keyboard():
+    """Haydovchi uchun asosiy klaviatura"""
+    keyboard = ReplyKeyboardMarkup(resize_keyboard=True, row_width=1)
+    keyboard.add(KeyboardButton("Profilim"))
+    keyboard.add(KeyboardButton("Foydalanish qo'llanmasi"))
+    return keyboard
+
+def get_passenger_keyboard():
+    """Yo'lovchi uchun asosiy klaviatura"""
     keyboard = ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
-    buttons = ["Profilim", "Foydalanish qo'llanmasi"]
-    keyboard.add(*[KeyboardButton(text) for text in buttons])
+    keyboard.add(KeyboardButton("Yo'lga otlanish"))
+    keyboard.add(KeyboardButton("Profilim"), KeyboardButton("Buyurtma tarixi"))
+    keyboard.add(KeyboardButton("Foydalanish qo'llanmasi"))
     return keyboard

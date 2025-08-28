@@ -6,6 +6,9 @@ class RegistrationForm(StatesGroup):
     last_name = State()
     phone_number = State()
 
+class DriverState(StatesGroup):
+    waiting_subscription = State()
+
 class OrderState(StatesGroup):
     from_region = State()
     from_district = State()
@@ -15,3 +18,14 @@ class OrderState(StatesGroup):
     datetime = State()
     time = State()
     confirmation = State()
+
+class EditProfile(StatesGroup):
+    first_name = State()
+    last_name = State()
+    phone_number = State()
+
+class ChangeRole(StatesGroup):
+    role = State()
+
+class HistoryState(StatesGroup):
+    pagination = State()

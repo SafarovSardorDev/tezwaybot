@@ -132,3 +132,6 @@ dmypy.json
 .sqlite3
 .sql
 .toml
+
+# Prisma
+prisma/migrations/

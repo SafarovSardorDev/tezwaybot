@@ -1,11 +1,11 @@
 datasource db {
-    provider = "postgresql"
-    url      = env("DATABASE_URL")
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 generator client {
-    provider        = "prisma-client-py"
-    previewFeatures = ["prismaSchemaFolder"]
+  provider        = "prisma-client-py"
+  previewFeatures = ["prismaSchemaFolder"]
 }
 
 enum Role {
@@ -16,43 +16,91 @@ enum Role {
 }
 
 model User {
-  id          Int       @id @default(autoincrement())
-  firstName   String
-  lastName    String
-  telegramId  BigInt    @unique  // Katta raqamlar uchun BigInt
-  phoneNumber String
-  username    String?
-  role        Role      @default(PASSENGER)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  
-  passengerOrders Order[] @relation("PassengerOrders")
-  driverOrders    Order[] @relation("DriverOrders")
+  id              Int           @id @default(autoincrement())
+  firstName       String
+  lastName        String
+  telegramId      BigInt        @unique // Katta raqamlar uchun BigInt
+  phoneNumber     String
+  username        String?
+  role            Role          @default(PASSENGER)
+  passengerOrders Order[]       @relation("PassengerOrders")
+  driverOrders    Order[]       @relation("DriverOrders")
+  orderStatuses   OrderStatus[] // Bu nom o'zgartirildi (OrderStatus emas, orderStatuses)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
 }
 
 model Order {
-  id           Int      @id @default(autoincrement())
-  passengerId  Int
-  driverId     Int?
-  fromRegion   String
-  fromDistrict String
-  toRegion     String
-  toDistrict   String
-  passengers   Int
-  departureTime DateTime
-  status       OrderStatus @default(NEW)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  
-  passenger    User     @relation("PassengerOrders", fields: [passengerId], references: [id])
-  driver       User?    @relation("DriverOrders", fields: [driverId], references: [id])
+  id             Int       @id @default(autoincrement())
+  passengerId    Int
+  driverId       Int?
+
+  fromRegionId   Int
+  fromDistrictId Int
+  toRegionId     Int
+  toDistrictId   Int
+
+  // Bu yerda relation nomlari to'g'ri yozildi
+  fromRegion     Region    @relation("OrderFromRegion", fields: [fromRegionId], references: [id])
+  fromDistrict   District  @relation("OrderFromDistrict", fields: [fromDistrictId], references: [id])
+  toRegion       Region    @relation("OrderToRegion", fields: [toRegionId], references: [id])
+  toDistrict     District  @relation("OrderToDistrict", fields: [toDistrictId], references: [id])
+
+  passengers     Int
+  departureTime  DateTime
+  status         OrderStatus?
+
+  passenger      User      @relation("PassengerOrders", fields: [passengerId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  driver         User?     @relation("DriverOrders", fields: [driverId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 }
 
-enum OrderStatus {
-  NEW
-  ACCEPTED
-  IN_PROGRESS
-  COMPLETED
-  CANCELLED
-  REJECTED
+model Region {
+  id        Int        @id @default(autoincrement())
+  name      String     @unique
+
+  // Bu yerda xatolik bor edi - Region[] emas, Order[] bo'lishi kerak
+  ordersFrom Order[]   @relation("OrderFromRegion")
+  ordersTo   Order[]   @relation("OrderToRegion")
+
+  districts  District[]
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+}
+
+model District {
+  id        Int      @id @default(autoincrement())
+  name      String
+  regionId  Int
+  region    Region   @relation(fields: [regionId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  // Bu yerda ham xatolik bor edi - District[] emas, Order[] bo'lishi kerak
+  ordersFrom Order[] @relation("OrderFromDistrict")
+  ordersTo   Order[] @relation("OrderToDistrict")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([name, regionId])
+}
+
+model OrderStatus {
+  id        Int             @id @default(autoincrement())
+  status    OrderStatusEnum @default(initiated)
+  user      User?           @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  userId    Int?
+  order     Order           @relation(fields: [orderId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  orderId   Int             @unique
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+}
+
+enum OrderStatusEnum {
+  initiated   // Transaction has been created but not yet processed.
+  processing  // Order is currently in progress (jarayonda).
+  completed   // Transaction has been successfully completed.
+  failed      // Transaction has failed due to an unspecified error.
+  canceled    // Transaction has been canceled by the user or system.
 }

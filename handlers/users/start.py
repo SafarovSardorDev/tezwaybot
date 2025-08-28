@@ -1,87 +1,34 @@
-import os
 import logging
-import json
-from datetime import datetime, date, timedelta
 from aiogram import types
-from utils.notifications import notify_drivers_about_order
-# from aiogram.dispatcher.filters.builtin import CommandStart
-from loader import dp, db, bot
-from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.dispatcher import FSMContext
-from states.registerstates import RegistrationForm, OrderState
 from aiogram.types import ReplyKeyboardRemove, InlineKeyboardButton, InlineKeyboardMarkup
+from loader import dp, db, bot
+from states.registerstates import RegistrationForm, DriverState
+from keyboards.defaultbtns import get_role_keyboard, get_phone_keyboard, get_driver_keyboard, get_passenger_keyboard
+from keyboards.admin_btns import admin_main_menu
+from utils.validators import normalize_phone, validate_phone
 from dotenv import load_dotenv
-from keyboards.defaultbtns import (
-                                    get_role_keyboard, 
-                                    get_phone_keyboard, 
-                                    get_driver_keyboard, 
-                                    get_passenger_keyboard
-)
+import os
+
 load_dotenv()
+CHANNEL_ID = os.getenv("CHANNEL_ID")
 
-OWNER_ID = int(os.getenv("OWNER_ID"))
+async def get_channel_url():
+    """Kanalning URL manzilini olish"""
+    try:
+        chat = await bot.get_chat(CHANNEL_ID)
+        return f"https://t.me/{chat.username.replace('@', '')}" if chat.username else f"https://t.me/c/{str(CHANNEL_ID)[4:]}"
+    except Exception as e:
+        logging.error(f"Kanal ma'lumotlarini olishda xato: {e}")
+        return f"https://t.me/c/{str(CHANNEL_ID)[4:]}"
 
-
-
-# async def save_user_to_db(user: types.User):
-#     """Foydalanuvchi ma'lumotlarini saqlash funksiyasi"""
-#     try:
-#         print(f"Saving user {user.id} to the database...")
-
-#         if user.id == OWNER_ID:
-#             role = "owner"
-#         else:
-#             existing_admin = await db.user.find_first(where={"telegramId": user.id, "role": "admin"})
-#             role = "admin" if existing_admin else "user"
-
-#         existing_user = await db.user.find_first(where={"telegramId": user.id})
-
-#         if existing_user:
-#             print(f"User {user.id} exists, updating...")
-#             await db.user.update(
-#                 where={"telegramId": user.id},
-#                 data={
-#                     "firstName": user.first_name,
-#                     "lastName": user.last_name,
-#                     "isPremium": False,
-#                     "isBot": user.is_bot,
-#                     "languageCode": user.language_code,
-#                     "username": user.username,
-#                     "role": role, 
-#                     "updatedAt": datetime.now()
-#                 }
-#             )
-#         else:
-#             print(f"User {user.id} not found, creating...")
-#             await db.user.create(
-#                 data={
-#                     "telegramId": user.id,
-#                     "firstName": user.first_name,
-#                     "lastName": user.last_name,
-#                     "isPremium": False,
-#                     "isBot": user.is_bot,
-#                     "languageCode": user.language_code,
-#                     "username": user.username,
-#                     "role": role
-#                 }
-#             )
-#     except Exception as e:
-#         print(f"Error saving user to database: {e}")
-
-
-# Start buyrug'i
 @dp.message_handler(commands=['start'])
 async def cmd_start(message: types.Message):
-    
-    # Foydalanuvchi mavjudligini tekshirish
     user = await db.user.find_unique(
-        where={
-            'telegramId': str(message.from_user.id)
-        }
+        where={'telegramId': str(message.from_user.id)}
     )
     
     if user:
-        # Mavjud foydalanuvchi uchun tegishli klaviaturani ko'rsatish
         if user.role == "DRIVER":
             await message.answer(f"Salom, {user.firstName}! Haydovchi sifatida tizimga kirdingiz.", 
                                 reply_markup=get_driver_keyboard())
@@ -89,16 +36,12 @@ async def cmd_start(message: types.Message):
             await message.answer(f"Salom, {user.firstName}! Yo'lovchi sifatida tizimga kirdingiz.", 
                                 reply_markup=get_passenger_keyboard())
         else:
-            # Admin va Super Admin uchun logika
-            await message.answer(f"Salom, {user.firstName}! Admin paneliga xush kelibsiz.")
+            await message.answer(f"Salom, {user.firstName}! Admin paneliga xush kelibsiz.", reply_markup=admin_main_menu())
     else:
-        # Yangi foydalanuvchi uchun ro'yxatdan o'tish
         await message.answer("Salom! Botimizga xush kelibsiz. Iltimos, rolni tanlang:", 
                             reply_markup=get_role_keyboard())
         await RegistrationForm.role.set()
-    
 
-# Rol tanlash
 @dp.message_handler(state=RegistrationForm.role)
 async def process_role(message: types.Message, state: FSMContext):
     if message.text not in ["Haydovchi", "Yo'lovchi"]:
@@ -110,14 +53,12 @@ async def process_role(message: types.Message, state: FSMContext):
     await message.answer("Ismingizni kiriting:", reply_markup=ReplyKeyboardRemove())
     await RegistrationForm.first_name.set()
 
-# Ism olish
 @dp.message_handler(state=RegistrationForm.first_name)
 async def process_first_name(message: types.Message, state: FSMContext):
     await state.update_data(first_name=message.text)
     await message.answer("Familiyangizni kiriting:")
     await RegistrationForm.last_name.set()
 
-# Familiya olish
 @dp.message_handler(state=RegistrationForm.last_name)
 async def process_last_name(message: types.Message, state: FSMContext):
     await state.update_data(last_name=message.text)
@@ -125,73 +66,25 @@ async def process_last_name(message: types.Message, state: FSMContext):
                        reply_markup=get_phone_keyboard())
     await RegistrationForm.phone_number.set()
 
-def validate_phone(phone: str) -> bool:
-    """Telefon raqamini tekshirish"""
-    # Oddiy tekshirish (+998912345678 yoki 991234567 formatida)
-    import re
-    pattern = r'^(\+998|998|8|)?[\d]{9}$'
-    return bool(re.match(pattern, phone))
-
 @dp.message_handler(state=RegistrationForm.phone_number)
 async def process_phone(message: types.Message, state: FSMContext):
-    # Telefon raqamini validatsiya qilish
-    phone = message.text
-    if not validate_phone(phone):  # O'zingizning validatsiya funksiyangiz
+    phone = normalize_phone(message.text)
+    if not validate_phone(phone):
         await message.answer("❌ Noto'g'ri telefon raqam formati. Iltimos, qayta kiriting:")
         return
     
-    # Telefon raqamini saqlash
-    await db.user.update(
-        where={"telegramId": message.from_user.id},
-        data={"phoneNumber": phone}
-    )
-    
-    await message.answer("📞 Telefon raqamingiz qabul qilindi!")
-        # Ma'lumotlarni olish
-    user_data = await state.get_data()
-    
-    # Ro'yxatdan o'tkazish
-    
-    try:
-        role_value = user_data['role']
-        new_user = await db.user.create(
-            data={
-                'firstName': user_data['first_name'],
-                'lastName': user_data['last_name'],
-                'telegramId': str(message.from_user.id),
-                'phoneNumber': phone,
-                'username': message.from_user.username or "",
-                'role': role_value
-            }
-        )
-        
-        # Rol asosida klaviatura tanlash
-        if role_value == "DRIVER":
-            await message.answer(
-                f"Tabriklaymiz, {new_user.firstName}! Siz haydovchi sifatida ro'yxatdan o'tdingiz.",
-                reply_markup=get_driver_keyboard()
-            )
-        else:  # PASSENGER
-            await message.answer(
-                f"Tabriklaymiz, {new_user.firstName}! Siz yo'lovchi sifatida ro'yxatdan o'tdingiz.",
-                reply_markup=get_passenger_keyboard()
-            )
-            
-    except Exception as e:
-        logging.error(f"Ro'yxatdan o'tkazishda xatolik: {e}")
-        await message.answer("Ro'yxatdan o'tkazishda xatolik yuz berdi. Iltimos, qaytadan urinib ko'ring.")
-    
-    await state.finish()
+    await create_user(message, state, phone)
 
-# Telefon raqam olish
 @dp.message_handler(content_types=types.ContentType.CONTACT, state=RegistrationForm.phone_number)
 async def process_phone_number(message: types.Message, state: FSMContext):
-    phone_number = message.contact.phone_number
-    
-    # Ma'lumotlarni olish
+    phone_number = normalize_phone(message.contact.phone_number)
+    if not validate_phone(phone_number):
+        await message.answer("❌ Noto'g'ri telefon raqam formati. Iltimos, qayta kiriting:")
+        return
+    await create_user(message, state, phone_number)
+
+async def create_user(message: types.Message, state: FSMContext, phone_number: str):
     user_data = await state.get_data()
-    
-    # Ro'yxatdan o'tkazish
     
     try:
         role_value = user_data['role']
@@ -206,84 +99,127 @@ async def process_phone_number(message: types.Message, state: FSMContext):
             }
         )
         
-        # Rol asosida klaviatura tanlash
         if role_value == "DRIVER":
-            await message.answer(
-                f"Tabriklaymiz, {new_user.firstName}! Siz haydovchi sifatida ro'yxatdan o'tdingiz.",
-                reply_markup=get_driver_keyboard()
+            channel_url = await get_channel_url()
+            welcome_text = (
+                f"Tabriklaymiz, {new_user.firstName}! Siz haydovchi sifatida ro'yxatdan o'tdingiz.\n\n"
+                f"Buyurtmalarni olish uchun maxsus haydovchilar kanaliga obuna bo'lishingiz kerak.\n"
+                f"Kanal orqali yangi yo'lovchi buyurtmalaridan xabardor bo'lasiz."
             )
-        else:  # PASSENGER
+            
+            markup = InlineKeyboardMarkup(row_width=1)
+            markup.add(InlineKeyboardButton("➕ Kanalga obuna bo'lish", url=channel_url))
+            markup.add(InlineKeyboardButton("✅ Obunani tekshirish", callback_data="check_subscription"))
+            
+            sent_message = await message.answer(welcome_text, reply_markup=markup)
+            
+            await state.update_data(
+                drivers_channel=CHANNEL_ID, 
+                welcome_message_id=sent_message.message_id,
+                user_name=new_user.firstName
+            )
+            await DriverState.waiting_subscription.set()
+        else:
             await message.answer(
                 f"Tabriklaymiz, {new_user.firstName}! Siz yo'lovchi sifatida ro'yxatdan o'tdingiz.",
                 reply_markup=get_passenger_keyboard()
             )
+            await state.finish()
             
     except Exception as e:
         logging.error(f"Ro'yxatdan o'tkazishda xatolik: {e}")
         await message.answer("Ro'yxatdan o'tkazishda xatolik yuz berdi. Iltimos, qaytadan urinib ko'ring.")
-    
-    await state.finish()
+        await state.finish()
 
-# Profilni ko'rish
-@dp.message_handler(lambda message: message.text == "Profilim")
-async def show_profile(message: types.Message):
-
+@dp.callback_query_handler(lambda c: c.data == "check_subscription", state=DriverState.waiting_subscription)
+async def check_driver_subscription(callback_query: types.CallbackQuery, state: FSMContext):
+    user_id = callback_query.from_user.id
+    state_data = await state.get_data()
+    drivers_channel = state_data.get('drivers_channel', CHANNEL_ID)
+    welcome_message_id = state_data.get('welcome_message_id')
+    user_name = state_data.get('user_name', 'Haydovchi')
     
-    user = await db.user.find_unique(
-        where={
-            'telegramId': str(message.from_user.id)
-        }
-    )
-    
-    if user:
-        profile_text = (
-            f"👤 Ism: {user.firstName}\n"
-            f"👤 Familiya: {user.lastName}\n"
-            f"📱 Telefon: +{user.phoneNumber}\n"
-            # f"""🔑 Rol: {"Haydovchi" if user.role == "DRIVER" else "Yo'lovchi"}\n"""
-            f"📅 Ro'yxatdan o'tilgan sana: {user.createdAt.strftime('%d.%m.%Y')}"
-        )
-        await message.answer(profile_text)
-    else:
-        await message.answer("Siz ro'yxatdan o'tmagansiz. /start buyrug'ini bosing.")
-    
-
-# Foydalanish qo'llanmasi
-@dp.message_handler(lambda message: message.text == "Foydalanish qo'llanmasi")
-async def show_manual(message: types.Message):
-
-    
-    user = await db.user.find_unique(
-        where={
-            'telegramId': str(message.from_user.id)
-        }
-    )
-    
-    if not user:
-        await message.answer("Siz ro'yxatdan o'tmagansiz. /start buyrug'ini bosing.")
-    else:
-        if user.role == "DRIVER":
-            manual_text = (
-                "🚗 Haydovchi uchun qo'llanma:\n\n"
-                "1. 'Profilim' - shaxsiy ma'lumotlarni ko'rish\n"
-                "2. 'Foydalanish qo'llanmasi' - ushbu qo'llanmani ko'rish\n"
-                "\nQo'shimcha funksiyalar keyinchalik qo'shiladi."
-            )
-        else:  # PASSENGER
-            manual_text = (
-                "🚶 Yo'lovchi uchun qo'llanma:\n\n"
-                "1. 'Yo'lga otlanish' - yangi yo'l buyurtmasini berish\n"
-                "2. 'Profilim' - shaxsiy ma'lumotlarni ko'rish\n"
-                "3. 'Buyurtma tarixi' - avvalgi buyurtmalarni ko'rish\n"
-                "4. 'Foydalanish qo'llanmasi' - ushbu qo'llanmani ko'rish\n"
-                "\nQo'shimcha funksiyalar keyinchalik qo'shiladi."
+    try:
+        member = await bot.get_chat_member(chat_id=drivers_channel, user_id=user_id)
+        
+        if member.status in ["member", "administrator", "creator"]:
+            success_text = (
+                f"✅ Tabriklaymiz, {user_name}!\n\n"
+                f"Kanalga muvaffaqiyatli obuna bo'ldingiz. "
+                f"Endi buyurtmalarni qabul qilishingiz mumkin!"
             )
             
-        await message.answer(manual_text)
+            try:
+                await callback_query.message.edit_text(
+                    text=success_text,
+                    reply_markup=None
+                )
+                
+                await bot.send_message(
+                    chat_id=user_id,
+                    text="Haydovchi paneliga xush kelibsiz:",
+                    reply_markup=get_driver_keyboard()
+                )
+
+                await state.finish()
+                await callback_query.answer("🎉 Obuna tasdiqlandi!", show_alert=False)
+                
+            except Exception as edit_error:
+                logging.error(f"Xabarni edit qilishda xato: {edit_error}")
+                await bot.send_message(
+                    chat_id=user_id,
+                    text=success_text,
+                    reply_markup=get_driver_keyboard()
+                )
+                await state.finish()
+                await callback_query.answer("🎉 Obuna tasdiqlandi!")
+                
+        else:
+            await callback_query.answer(
+                "❌ Siz hali kanalga obuna bo'lmagansiz!\n\n"
+                "Iltimos, avval kanalga obuna bo'ling, keyin yana 'Obunani tekshirish' tugmasini bosing.",
+                show_alert=True
+            )
+            
+    except Exception as e:
+        logging.error(f"Kanal obunasini tekshirishda xato: {e}")
+        await callback_query.answer(
+            "⚠️ Obunani tekshirishda xatolik yuz berdi.\n"
+            "Iltimos, bir oz kuting va qayta urinib ko'ring.",
+            show_alert=True
+        )
+
+@dp.message_handler(commands=['check_subscription'])
+async def manual_subscription_check(message: types.Message):
+    """Haydovchi qo'lda obunani tekshirish uchun"""
+    user = await db.user.find_unique(
+        where={'telegramId': str(message.from_user.id)}
+    )
     
-
-
-
-
-
+    if not user or user.role != "DRIVER":
+        await message.answer("Bu buyruq faqat haydovchilar uchun!")
+        return
     
+    try:
+        member = await bot.get_chat_member(chat_id=CHANNEL_ID, user_id=message.from_user.id)
+        
+        if member.status in ["member", "administrator", "creator"]:
+            await message.answer(
+                f"✅ {user.firstName}, siz kanalga obuna bo'lgansiz!\n"
+                f"Haydovchi paneliga xush kelibsiz:",
+                reply_markup=get_driver_keyboard()
+            )
+        else:
+            channel_url = await get_channel_url()
+            markup = InlineKeyboardMarkup()
+            markup.add(InlineKeyboardButton("➕ Kanalga obuna bo'lish", url=channel_url))
+            
+            await message.answer(
+                f"❌ {user.firstName}, siz hali kanalga obuna bo'lmagansiz.\n"
+                f"Buyurtmalarni olish uchun kanalga obuna bo'ling:",
+                reply_markup=markup
+            )
+            
+    except Exception as e:
+        logging.error(f"Manual obuna tekshirishda xato: {e}")
+        await message.answer("Obunani tekshirishda xatolik yuz berdi.")
