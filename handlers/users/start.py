@@ -12,6 +12,7 @@ import os
 
 load_dotenv()
 CHANNEL_ID = os.getenv("CHANNEL_ID")
+OWNER_IDS = list(map(int, os.getenv("OWNER_ID", "").split(','))) if os.getenv("OWNER_ID") else []
 
 async def get_channel_url():
     """Kanalning URL manzilini olish"""
@@ -22,10 +23,65 @@ async def get_channel_url():
         logging.error(f"Kanal ma'lumotlarini olishda xato: {e}")
         return f"https://t.me/c/{str(CHANNEL_ID)[4:]}"
 
+async def create_admin_user(user_id, first_name, last_name, username):
+    """Admin foydalanuvchini yaratish"""
+    try:
+        # Prisma orqali foydalanuvchini yaratish
+        user = await db.user.create({
+            'firstName': first_name,
+            'lastName': last_name or '',
+            'telegramId': user_id,
+            'phoneNumber': 'admin',
+            'username': username,
+            'role': 'ADMIN'
+        })
+        return user
+    except Exception as e:
+        logging.error(f"Admin foydalanuvchini yaratishda xato: {e}")
+        return None
+
 @dp.message_handler(commands=['start'])
 async def cmd_start(message: types.Message):
+    user_id = message.from_user.id
+    first_name = message.from_user.first_name
+    last_name = message.from_user.last_name or ""
+    username = message.from_user.username
+    
+    # Agar foydalanuvchi OWNER_ID lar ro'yxatida bo'lsa
+    if user_id in OWNER_IDS:
+        user = await db.user.find_unique(
+            where={'telegramId': str(user_id)}
+        )
+        
+        # Agar foydalanuvchi bazada yo'q bo'lsa, uni admin sifatida yaratish
+        if not user:
+            user = await create_admin_user(str(user_id), first_name, last_name, username)
+            
+            if user:
+                await message.answer(f"Salom {first_name}! Siz admin sifatida ro'yxatdan o'tdingiz. Admin paneliga xush kelibsiz!", 
+                                    reply_markup=admin_main_menu())
+            else:
+                await message.answer("Xatolik yuz berdi. Iltimos, qayta urunib ko'ring.")
+            return
+        
+        # Agar foydalanuvchi allaqachon mavjud bo'lsa
+        if user.role == "ADMIN" or user.role == "SUPER_ADMIN":
+            greeting = f"Salom ADMIN @{username}" if username else f"Salom ADMIN {first_name}"
+            await message.answer(f"{greeting}. Admin paneliga xush kelibsiz!", 
+                                reply_markup=admin_main_menu())
+        else:
+            # Agar foydalanuvchi admin emas bo'lsa, rolini yangilash
+            await db.user.update(
+                where={'telegramId': str(user_id)},
+                data={'role': 'ADMIN'}
+            )
+            await message.answer(f"Salom {first_name}! Sizning profilingiz admin sifatida yangilandi. Admin paneliga xush kelibsiz!", 
+                                reply_markup=admin_main_menu())
+        return
+    
+    # Oddiy foydalanuvchilar uchun
     user = await db.user.find_unique(
-        where={'telegramId': str(message.from_user.id)}
+        where={'telegramId': str(user_id)}
     )
     
     if user:
@@ -35,12 +91,16 @@ async def cmd_start(message: types.Message):
         elif user.role == "PASSENGER":
             await message.answer(f"Salom, {user.firstName}! Yo'lovchi sifatida tizimga kirdingiz.", 
                                 reply_markup=get_passenger_keyboard())
-        else:
-            await message.answer(f"Salom, {user.firstName}! Admin paneliga xush kelibsiz.", reply_markup=admin_main_menu())
+        elif user.role in ["ADMIN", "SUPER_ADMIN"]:
+            greeting = f"Salom ADMIN @{username}" if username else f"Salom ADMIN {first_name}"
+            await message.answer(f"{greeting}. Admin paneliga xush kelibsiz!", 
+                                reply_markup=admin_main_menu())
     else:
         await message.answer("Salom! Botimizga xush kelibsiz. Iltimos, rolni tanlang:", 
                             reply_markup=get_role_keyboard())
         await RegistrationForm.role.set()
+
+        #####################################
 
 @dp.message_handler(state=RegistrationForm.role)
 async def process_role(message: types.Message, state: FSMContext):

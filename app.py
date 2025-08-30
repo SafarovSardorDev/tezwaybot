@@ -3,10 +3,12 @@ from loader import dp, db
 import middlewares, filters, handlers
 from utils.notify_admins import on_startup_notify
 from utils.set_bot_commands import set_default_commands
+from handlers.users.departure import initialize_departure_module
 
 
 async def on_startup(dispatcher):
     """Bot ishga tushganda Prisma client’ni bog‘lash"""
+    await initialize_departure_module()
     await set_default_commands(dispatcher)
     await db.connect()  # **Barcha joylar uchun bitta ulanish!**
     await on_startup_notify(dispatcher)
