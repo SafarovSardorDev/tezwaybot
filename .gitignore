@@ -133,7 +133,4 @@ dmypy.json
 .sql
 .toml
 
-# Prisma
-prisma/migrations/
-
 error
