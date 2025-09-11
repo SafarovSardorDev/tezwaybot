@@ -15,14 +15,13 @@ def get_phone_keyboard():
 def get_driver_keyboard():
     """Haydovchi uchun asosiy klaviatura"""
     keyboard = ReplyKeyboardMarkup(resize_keyboard=True, row_width=1)
-    keyboard.add(KeyboardButton("Profilim"))
+    keyboard.add(KeyboardButton("⚙️ Profilim"))
     # keyboard.add(KeyboardButton("Foydalanish qo'llanmasi"))
     return keyboard
 
 def get_passenger_keyboard():
     """Yo'lovchi uchun asosiy klaviatura"""
     keyboard = ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
-    keyboard.add(KeyboardButton("Yo'lga otlanish"))
-    keyboard.add(KeyboardButton("Profilim"), KeyboardButton("Buyurtma tarixi"))
-    # keyboard.add(KeyboardButton("Foydalanish qo'llanmasi"))
+    keyboard.add(KeyboardButton("🚕 Yo'lga otlanish"), KeyboardButton("📦 Pochta jonatish"))
+    keyboard.add(KeyboardButton("⚙️ Profilim"), KeyboardButton("📋 Buyurtma tarixi"))
     return keyboard

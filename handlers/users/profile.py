@@ -21,7 +21,7 @@ class EditProfile(StatesGroup):
 class ChangeRole(StatesGroup):
     role = State()
 
-@dp.message_handler(lambda message: message.text == "Profilim", state="*")
+@dp.message_handler(lambda message: message.text == "⚙️ Profilim", state="*")
 async def show_profile(message: types.Message, state: FSMContext):
     """Foydalanuvchi profilini ko'rsatish va tahrirlash/rol o'zgartirish imkoniyatini berish."""
 
@@ -36,14 +36,13 @@ async def show_profile(message: types.Message, state: FSMContext):
         f"👤 Ism: {user.firstName}\n"
         f"👤 Familiya: {user.lastName}\n"
         f"📱 Telefon: {user.phoneNumber}\n"
-        f"🔑 Rol: {role_text.get(user.role, user.role)}\n"
         f"📅 Ro'yxatdan o'tilgan sana: {user.createdAt.strftime('%d.%m.%Y')}"
     )
     
     markup = InlineKeyboardMarkup(row_width=1) 
     markup.add(
         InlineKeyboardButton("✏️ Profilni tahrirlash", callback_data="edit_profile"),
-        InlineKeyboardButton("🔄 Rolni o'zgartirish", callback_data="change_role"),
+        # InlineKeyboardButton("🔄 Rolni o'zgartirish", callback_data="change_role"),
         InlineKeyboardButton("⬅️ Orqaga", callback_data="back_to_main")
     )
     
@@ -103,53 +102,53 @@ async def process_edit_phone(message: types.Message, state: FSMContext):
         await message.answer("⚠️ Profilni yangilashda xatolik yuz berdi.")
         await state.finish()
 
-@dp.callback_query_handler(lambda c: c.data == "change_role")
-async def start_change_role(callback_query: types.CallbackQuery, state: FSMContext):
-    """Rolni o'zgartirish jarayonini boshlash."""
-    user = await db.user.find_unique(where={'telegramId': str(callback_query.from_user.id)})
+# @dp.callback_query_handler(lambda c: c.data == "change_role")
+# async def start_change_role(callback_query: types.CallbackQuery, state: FSMContext):
+#     """Rolni o'zgartirish jarayonini boshlash."""
+#     user = await db.user.find_unique(where={'telegramId': str(callback_query.from_user.id)})
     
-    if not user:
-        await callback_query.answer("❌ Siz ro'yxatdan o'tmagansiz.", show_alert=True)
-        return
+#     if not user:
+#         await callback_query.answer("❌ Siz ro'yxatdan o'tmagansiz.", show_alert=True)
+#         return
     
-    if user.role != "SUPER_ADMIN":
-        markup = InlineKeyboardMarkup(row_width=1)
-        markup.add(
-            InlineKeyboardButton("📞 Admin bilan bog'lanish", url=f"tg://user?id={OWNER_ID}"),
-            InlineKeyboardButton("⬅️ Orqaga", callback_data="back_to_main")
-        )
-        await callback_query.message.edit_text(
-            "⛔️ Faqat Super Adminlar rolni o'zgartira oladi. Iltimos, admin bilan bog'laning.",
-            reply_markup=markup
-        )
-        await callback_query.answer()
-        return
+#     if user.role != "SUPER_ADMIN":
+#         markup = InlineKeyboardMarkup(row_width=1)
+#         markup.add(
+#             InlineKeyboardButton("📞 Admin bilan bog'lanish", url=f"tg://user?id={OWNER_ID}"),
+#             InlineKeyboardButton("⬅️ Orqaga", callback_data="back_to_main")
+#         )
+#         await callback_query.message.edit_text(
+#             "⛔️ Faqat Super Adminlar rolni o'zgartira oladi. Iltimos, admin bilan bog'laning.",
+#             reply_markup=markup
+#         )
+#         await callback_query.answer()
+#         return
     
-    await callback_query.message.edit_text("Yangi rolni tanlang:", reply_markup=get_role_keyboard())
-    await ChangeRole.role.set()
+#     await callback_query.message.edit_text("Yangi rolni tanlang:", reply_markup=get_role_keyboard())
+#     await ChangeRole.role.set()
 
-@dp.message_handler(state=ChangeRole.role)
-async def process_change_role(message: types.Message, state: FSMContext):
-    """Yangi rolni saqlash."""
-    if message.text not in ["Haydovchi", "Yo'lovchi"]:
-        await message.answer("Iltimos, quyidagi tugmalardan birini tanlang!", reply_markup=get_role_keyboard())
-        return
+# @dp.message_handler(state=ChangeRole.role)
+# async def process_change_role(message: types.Message, state: FSMContext):
+#     """Yangi rolni saqlash."""
+#     if message.text not in ["Haydovchi", "Yo'lovchi"]:
+#         await message.answer("Iltimos, quyidagi tugmalardan birini tanlang!", reply_markup=get_role_keyboard())
+#         return
     
-    role = "DRIVER" if message.text == "Haydovchi" else "PASSENGER"
-    try:
-        user = await db.user.update(
-            where={'telegramId': str(message.from_user.id)},
-            data={'role': role}
-        )
-        await message.answer(
-            f"✅ Rol {message.text} ga o'zgartirildi!",
-            reply_markup=get_driver_keyboard() if role == "DRIVER" else get_passenger_keyboard()
-        )
-        await state.finish()
-    except Exception as e:
-        logging.error(f"Rolni o'zgartirishda xato: {e}")
-        await message.answer("⚠️ Rolni o'zgartirishda xatolik yuz berdi.")
-        await state.finish()
+#     role = "DRIVER" if message.text == "Haydovchi" else "PASSENGER"
+#     try:
+#         user = await db.user.update(
+#             where={'telegramId': str(message.from_user.id)},
+#             data={'role': role}
+#         )
+#         await message.answer(
+#             f"✅ Rol {message.text} ga o'zgartirildi!",
+#             reply_markup=get_driver_keyboard() if role == "DRIVER" else get_passenger_keyboard()
+#         )
+#         await state.finish()
+#     except Exception as e:
+#         logging.error(f"Rolni o'zgartirishda xato: {e}")
+#         await message.answer("⚠️ Rolni o'zgartirishda xatolik yuz berdi.")
+#         await state.finish()
 
 @dp.callback_query_handler(lambda c: c.data == "back_to_main", state="*")
 async def back_to_main(callback_query: types.CallbackQuery, state: FSMContext):

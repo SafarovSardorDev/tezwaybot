@@ -3,6 +3,7 @@ from aiogram.dispatcher import FSMContext
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from loader import dp, db, bot
 from states.registerstates import OrderState, HistoryState
+from datetime import datetime
 
 
 def get_order_status_text(status):
@@ -15,7 +16,101 @@ def get_order_status_text(status):
     }
     return status_translations.get(status, 'Holati noma\'lum')
 
-@dp.message_handler(lambda message: message.text == "Buyurtma tarixi", state="*")
+def format_datetime(dt, default_text="Belgilanmagan"):
+    """Datetime obyektini formatlab, None bo'lsa default text qaytaradi."""
+    if dt is None:
+        return default_text
+    try:
+        return dt.strftime('%Y-%m-%d %H:%M')
+    except (AttributeError, TypeError):
+        return default_text
+
+def format_order_info(order):
+    """Buyurtma turiga qarab ma'lumotlarni formatlab chiqaradi"""
+    # Region va district ma'lumotlarini olish
+    from_region = getattr(order.fromRegion, 'name', 'Noma\'lum') if order.fromRegion else 'Noma\'lum'
+    from_district = getattr(order.fromDistrict, 'name', 'Noma\'lum') if order.fromDistrict else 'Noma\'lum'
+    to_region = getattr(order.toRegion, 'name', 'Noma\'lum') if order.toRegion else 'Noma\'lum'
+    to_district = getattr(order.toDistrict, 'name', 'Noma\'lum') if order.toDistrict else 'Noma\'lum'
+    
+    # Buyurtma turini aniqlash
+    order_type = getattr(order, 'orderType', 'PASSENGER')
+    
+    order_info = []
+    
+    if order_type == "DELIVERY":
+        # Pochta buyurtmasi uchun ma'lumotlar
+        order_info.append(f"📦 Pochta buyurtma № {order.id}")
+        order_info.append(f"📍 Qayerdan: {from_region}, {from_district}")
+        order_info.append(f"🏁 Qayerga: {to_region}, {to_district}")
+        
+        # Paket ma'lumotlari
+        if order.packageType:
+            package_types = {
+                "DOCUMENT": "📄 Hujjat",
+                "PARCEL": "📦 Posilka", 
+                "FRAGILE": "🔸 Mo'rt buyum",
+                "VALUABLE": "💎 Qimmatbaho",
+                "OTHER": "📋 Boshqa"
+            }
+            order_info.append(f"📦 Turi: {package_types.get(order.packageType, 'Nomalum')}")
+        
+        if order.packageSize:
+            package_sizes = {
+                "SMALL": "📦 Kichik (10kg gacha)",
+                "MEDIUM": "📦 O'rta (10-25kg)",
+                "LARGE": "📦 Katta (25-50kg)", 
+                "EXTRA_LARGE": "📦 Juda katta (50kg+)"
+            }
+            order_info.append(f"📏 Hajmi: {package_sizes.get(order.packageSize, 'Nomalum')}")
+        
+        if order.packageWeight:
+            order_info.append(f"⚖️ Og'irligi: {order.packageWeight} kg")
+        
+        if order.receiverName:
+            order_info.append(f"👤 Qabul qiluvchi: {order.receiverName}")
+        
+        if order.receiverPhone:
+            order_info.append(f"📞 Telefon: {order.receiverPhone}")
+        
+        if order.packageDescription:
+            order_info.append(f"📝 Tavsifi: {order.packageDescription}")
+            
+    else:
+        # Yo'lovchi buyurtmasi uchun ma'lumotlar
+        order_info.append(f"🚗 Yo'lovchi buyurtma № {order.id}")
+        order_info.append(f"📍 Qayerdan: {from_region}, {from_district}")
+        order_info.append(f"🏁 Qayerga: {to_region}, {to_district}")
+        
+        # Yo'lovchilar soni
+        passengers_count = getattr(order, 'passengers', 1)
+        order_info.append(f"👥 Yo'lovchilar soni: {passengers_count}")
+        
+        # Ketish vaqti
+        departure_time = format_datetime(getattr(order, 'departureTime', None), "Belgilanmagan")
+        order_info.append(f"⏰ Ketish vaqti: {departure_time}")
+    
+    # Umumiy ma'lumotlar
+    order_info.append(f"📊 Holat: {get_order_status_text(order.status.status if order.status else 'initiated')}")
+    
+    # Haydovchi ma'lumotlari
+    if order.driver:
+        driver_first_name = getattr(order.driver, 'firstName', 'Noma\'lum')
+        driver_last_name = getattr(order.driver, 'lastName', '')
+        driver_phone = getattr(order.driver, 'phoneNumber', 'Noma\'lum')
+        
+        order_info.extend([
+            f"👤 Haydovchi: {driver_first_name} {driver_last_name}",
+            f"📞 Telefon: {driver_phone}"
+        ])
+    
+    # Yaratilgan sana
+    created_at = format_datetime(getattr(order, 'createdAt', None), "Noma'lum")
+    order_info.append(f"📅 Yaratilgan sana: {created_at}")
+    
+    return '\n'.join(order_info)
+
+@dp.message_handler(lambda message: message.text == "📋 Buyurtma tarixi", state="*")
 async def show_history(message: types.Message, state: FSMContext):
     user = await db.user.find_unique(where={'telegramId': str(message.from_user.id)})
     
@@ -25,12 +120,19 @@ async def show_history(message: types.Message, state: FSMContext):
 
     orders = await db.order.find_many(
         where={'passengerId': user.id},
-        include={'driver': True, 'status': True}
+        include={
+            'driver': True, 
+            'status': True, 
+            'fromRegion': True, 
+            'fromDistrict': True, 
+            'toRegion': True, 
+            'toDistrict': True
+        }
     )
     orders = sorted(orders, key=lambda x: x.createdAt, reverse=True)
 
     if not orders:
-        await message.answer("Sizda hech qanday buyurtma tarixi yo'q.")
+        await message.answer("⭕️ Sizda hech qanday buyurtma tarixi yo'q.")
         return
 
     await state.update_data(orders=orders, page=0, items_per_page=3)
@@ -50,22 +152,7 @@ async def show_paginated_history(chat_id, state: FSMContext, message_id=None):
 
     order_messages = []
     for order in current_page_orders:
-        order_info = [
-            f"🚗 Buyurtma № {order.id}",
-            f"📍 Qayerdan: {order.fromRegion}, {order.fromDistrict}",
-            f"🏁 Qayerga: {order.toRegion}, {order.toDistrict}",
-            f"👥 Yo'lovchilar soni: {order.passengers}",
-            f"⏰ Ketish vaqti: {order.departureTime.strftime('%Y-%m-%d %H:%M')}",
-            f"📊 Holat: {get_order_status_text(order.status.status if order.status else 'initiated')}"
-        ]
-        if order.driver:
-            driver_info = [
-                f"👤 Haydovchi: {order.driver.firstName} {order.driver.lastName}",
-                f"📞 Telefon: {order.driver.phoneNumber}"
-            ]
-            order_info.extend(driver_info)
-        order_info.append(f"📅 Yaratilgan sana: {order.createdAt.strftime('%Y-%m-%d %H:%M')}")
-        order_messages.append('\n'.join(order_info))
+        order_messages.append(format_order_info(order))
 
     page_info = f"📋 Buyurtmalar tarixi ({page + 1}/{total_pages})"
     full_history = f"{page_info}:\n\n" + '\n\n'.join(order_messages)

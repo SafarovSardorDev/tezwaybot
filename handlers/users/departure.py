@@ -173,7 +173,7 @@ async def update_channel_order_status(order, channel_message_id=None):
 # Kanal xabar ID larini saqlash uchun
 order_channel_messages = {}
 
-@dp.message_handler(lambda message: message.text == "Yo'lga otlanish", state="*")
+@dp.message_handler(lambda message: message.text == "🚕 Yo'lga otlanish", state="*")
 async def start_trip(message: types.Message, state: FSMContext):
     """Yo'lga otlanish jarayonini boshlash"""
     regions_dict, districts_dict = await get_regions_and_districts()

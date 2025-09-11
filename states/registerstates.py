@@ -29,3 +29,16 @@ class ChangeRole(StatesGroup):
 
 class HistoryState(StatesGroup):
     pagination = State()
+
+class DeliveryState(StatesGroup):
+    from_region = State()
+    from_district = State()
+    to_region = State()
+    to_district = State()
+    package_type = State()
+    package_size = State()
+    package_weight = State()
+    package_description = State()
+    receiver_name = State()
+    receiver_phone = State()
+    confirmation = State()

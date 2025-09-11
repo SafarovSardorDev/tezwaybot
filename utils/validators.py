@@ -86,3 +86,4 @@ def is_uzbek_phone(phone: str) -> bool:
     """
     is_valid, _ = validate_phone(phone)
     return is_valid
+
