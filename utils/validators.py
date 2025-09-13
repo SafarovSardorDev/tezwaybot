@@ -44,7 +44,7 @@ def validate_phone(phone: str) -> Tuple[bool, Optional[str]]:
         # Qo'shimcha tekshirish: ikkinchi raqam 9, 8, 7, 6, 5, 3, 4, 0, 1 bo'lishi kerak
         # O'zbekiston operatorlari uchun
         second_digit = normalized[4]  # +998X <- bu X
-        valid_operators = ['9', '8', '7', '6', '5', '3', '4', '0', '1']
+        valid_operators = ['9', '8', '7', '6', '5', '3', '4', '0', '1', '2']
         
         if second_digit in valid_operators:
             return True, None

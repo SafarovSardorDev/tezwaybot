@@ -22,10 +22,7 @@ class OrderState(StatesGroup):
 class EditProfile(StatesGroup):
     first_name = State()
     last_name = State()
-    phone_number = State()
-
-class ChangeRole(StatesGroup):
-    role = State()
+    phone = State()
 
 class HistoryState(StatesGroup):
     pagination = State()
