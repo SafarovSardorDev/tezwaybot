@@ -2,7 +2,7 @@ from aiogram import types, Dispatcher
 from datetime import datetime, timedelta
 from loader import dp, db
 
-@dp.message_handler(lambda message: message.text == "📊 Statistika")
+@dp.message_handler(lambda message: message.text == "📊 Statistika", state="*")
 async def show_statistics(message: types.Message):
     """Statistika tugmasi bosilganda barcha statistikani ko'rsatish"""
     

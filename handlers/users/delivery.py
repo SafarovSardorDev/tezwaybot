@@ -296,6 +296,11 @@ async def ask_package_size(callback_query: types.CallbackQuery, state: FSMContex
 @dp.callback_query_handler(lambda c: c.data.startswith("package_size_"), state=DeliveryState.package_size)
 async def ask_package_weight(callback_query: types.CallbackQuery, state: FSMContext):
     package_size = callback_query.data.split("_")[2]
+    
+    # PackageSize ni to'g'ri formatga keltirish
+    if package_size == "EXTRA":
+        package_size = "EXTRA_LARGE"
+    
     await state.update_data(package_size=package_size)
     
     keyboard = InlineKeyboardMarkup(row_width=1)
@@ -477,6 +482,11 @@ async def confirm_delivery(callback_query: types.CallbackQuery, state: FSMContex
         from_region = await db.region.find_first(where={"name": data.get("from_region")})
         to_region = await db.region.find_first(where={"name": data.get("to_region")})
         
+        if not from_region or not to_region:
+            await callback_query.message.edit_text("❌ Viloyat ma'lumotlari topilmadi. Iltimos, qayta urinib ko'ring.")
+            await state.finish()
+            return
+        
         from_district = await db.district.find_first(
             where={
                 "name": data.get("from_district"),
@@ -491,6 +501,22 @@ async def confirm_delivery(callback_query: types.CallbackQuery, state: FSMContex
             }
         )
 
+        if not from_district or not to_district:
+            await callback_query.message.edit_text("❌ Tuman ma'lumotlari topilmadi. Iltimos, qayta urinib ko'ring.")
+            await state.finish()
+            return
+
+        # PackageSize ni to'g'ri formatga keltirish
+        package_size = data.get("package_size")
+        if package_size:
+            # EXTRA ni EXTRA_LARGE ga o'zgartirish
+            if package_size == "EXTRA":
+                package_size = "EXTRA_LARGE"
+            # Boshqa noto'g'ri qiymatlarni tekshirish
+            valid_sizes = ["SMALL", "MEDIUM", "LARGE", "EXTRA_LARGE"]
+            if package_size not in valid_sizes:
+                package_size = None
+
         # Pochta buyurtmasini yaratish
         order_data = {
             "passengerId": user.id,
@@ -500,18 +526,21 @@ async def confirm_delivery(callback_query: types.CallbackQuery, state: FSMContex
             "toRegionId": to_region.id,
             "toDistrictId": to_district.id,
             "packageType": data.get("package_type"),
-            "packageSize": data.get("package_size")
+            "packageSize": package_size
         }
         
         # Optional fieldlarni qo'shish
         if data.get("package_weight"):
-            order_data["packageWeight"] = data.get("package_weight")
+            order_data["packageWeight"] = float(data.get("package_weight"))
         if data.get("package_description"):
             order_data["packageDescription"] = data.get("package_description")
         if data.get("receiver_name"):
             order_data["receiverName"] = data.get("receiver_name")
         if data.get("receiver_phone"):
             order_data["receiverPhone"] = data.get("receiver_phone")
+
+        # Null qiymatlarni olib tashlash
+        order_data = {k: v for k, v in order_data.items() if v is not None}
 
         order = await db.order.create(order_data)
 
@@ -573,6 +602,8 @@ async def confirm_delivery(callback_query: types.CallbackQuery, state: FSMContex
     except Exception as e:
         logging.error(f"Pochta buyurtma yaratishda xato: {e}")
         await callback_query.message.edit_text("❌ Xatolik yuz berdi! Iltimos, qayta urinib ko'ring.")
+        # Xatoni aniqroq log qilish
+        logging.error(f"Xato tafsilotlari: {str(e)}")
     
     await state.finish()
 
@@ -587,8 +618,25 @@ async def send_sender_info(callback_query: types.CallbackQuery):
     user_id = callback_query.from_user.id
     order_id = int(callback_query.data.split("_")[-1])
 
+    # Foydalanuvchini tekshirish
+    user = await db.user.find_unique(where={"telegramId": user_id})
+    if not user:
+        await callback_query.answer(
+            f"❌ Siz botda ro'yxatdan o'tmagansiz. Iltimos, botni ishlatish uchun ro'yxatdan o'ting: {BOT_USERNAME}",
+            show_alert=True
+        )
+        return
+
+    # Faqat DRIVER roliga ega foydalanuvchilarga ruxsat berish
+    if user.role != "DRIVER":
+        await callback_query.answer(
+            "❌ Uzr, bu tugma faqat haydovchilar uchun!",
+            show_alert=True
+        )
+        return
+
+    # Kanal a'zoligini tekshirish
     try:
-        # Kanal a'zoligini tekshirish
         member = await bot.get_chat_member(chat_id=CHANNEL_ID, user_id=user_id)
         if member.status in ["left", "kicked", "restricted"] and user_id != OWNER_ID:
             channel_url = await get_channel_url()
@@ -600,15 +648,6 @@ async def send_sender_info(callback_query: types.CallbackQuery):
     except Exception as e:
         logging.error(f"Kanalga obunani tekshirishda xatolik: {e}")
         await callback_query.answer("⚠️ Obunani tekshirishda xatolik yuz berdi.", show_alert=True)
-        return
-
-    # Foydalanuvchini tekshirish
-    user = await db.user.find_unique(where={"telegramId": user_id})
-    if not user:
-        await callback_query.answer(
-            f"❌ Siz botda ro'yxatdan o'tmagansiz. Iltimos, botni ishlatish uchun ro'yxatdan o'ting: {BOT_USERNAME}",
-            show_alert=True
-        )
         return
 
     # Buyurtmani olish
@@ -628,14 +667,6 @@ async def send_sender_info(callback_query: types.CallbackQuery):
         await callback_query.answer("❌ Buyurtma topilmadi yoki allaqachon o'chirilgan.", show_alert=True)
         return
     
-    # Jo'natuvchining o'z buyurtmasiga ruxsat
-    if user.role == "PASSENGER" and order.passenger.telegramId != user_id:
-        await callback_query.answer(
-            "⛔️ Siz faqat o'zingizning buyurtmangiz haqida ma'lumot olishingiz mumkin.",
-            show_alert=True
-        )
-        return
-
     current_status = order.status.status if order.status else "initiated"
     
     # Faqat initiated holatidagi buyurtmalarga ruxsat
@@ -667,7 +698,7 @@ async def send_sender_info(callback_query: types.CallbackQuery):
         if channel_message_id:
             await update_channel_delivery_status(updated_order, channel_message_id)
         
-        # 5 daqiqalik timer o'rnatish
+        # 5 daqiqaalik timer o'rnatish
         if order_id in delivery_processing_timers:
             delivery_processing_timers[order_id].cancel()
         
@@ -717,7 +748,9 @@ async def send_sender_info(callback_query: types.CallbackQuery):
     
     else:
         # Boshqa statuslar uchun
-        await update_channel_delivery_status(order, callback_query.message.message_id if hasattr(callback_query, 'message') else None)
+        channel_message_id = delivery_channel_messages.get(order_id)
+        if channel_message_id:
+            await update_channel_delivery_status(order, channel_message_id)
         
         status_messages = {
             "canceled": "❌ Pochta buyurtma bekor qilindi! (CANCELED)",

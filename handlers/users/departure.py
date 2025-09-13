@@ -113,7 +113,7 @@ async def processing_timer(order_id, channel_message_id):
             del processing_timers[order_id]
 
 async def update_channel_order_status(order, channel_message_id=None):
-    """Kanal xabarini yangilash"""
+    """Kanal xabarini yangilash - TUGMA TO'G'RI ISHLASHI UCHUN YANGILANDI"""
     try:
         if not channel_message_id:
             logging.warning(f"Order {order.id} uchun channel_message_id topilmadi")
@@ -152,20 +152,38 @@ async def update_channel_order_status(order, channel_message_id=None):
             try:
                 await bot.delete_message(chat_id=CHANNEL_ID, message_id=channel_message_id)
                 logging.info(f"Bekor qilingan buyurtma {order.id} kanaldan o'chirildi")
+                # Channel messages ro'yxatdan o'chirish
+                if order.id in order_channel_messages:
+                    del order_channel_messages[order.id]
                 return
             except Exception as delete_error:
                 logging.error(f"Xabarni o'chirishda xato: {delete_error}")
                 # Agar o'chirish muvaffaqiyatsiz bo'lsa, oddiy yangilash
         
-        await bot.edit_message_text(
-            chat_id=CHANNEL_ID,
-            message_id=channel_message_id,
-            text=new_text,
-            parse_mode="Markdown",
-            reply_markup=reply_markup
-        )
-        
-        logging.info(f"Kanal posti muvaffaqiyatli yangilandi: Order {order.id}, Status: {current_status}")
+        # Xabarni yangilash
+        try:
+            await bot.edit_message_text(
+                chat_id=CHANNEL_ID,
+                message_id=channel_message_id,
+                text=new_text,
+                parse_mode="Markdown",
+                reply_markup=reply_markup
+            )
+            logging.info(f"Kanal posti muvaffaqiyatli yangilandi: Order {order.id}, Status: {current_status}")
+        except Exception as edit_error:
+            logging.error(f"Kanal postini yangilashda xato: Order {order.id}, Error: {edit_error}")
+            # Agar xabar yangilanmasa, yangi xabar yuborish
+            try:
+                new_message = await bot.send_message(
+                    chat_id=CHANNEL_ID,
+                    text=new_text,
+                    parse_mode="Markdown",
+                    reply_markup=reply_markup
+                )
+                order_channel_messages[order.id] = new_message.message_id
+                logging.info(f"Yangi kanal posti yaratildi: Order {order.id}")
+            except Exception as send_error:
+                logging.error(f"Yangi kanal posti yaratishda xato: {send_error}")
         
     except Exception as e:
         logging.error(f"Kanal postini yangilashda xato: Order {order.id}, Error: {e}")
@@ -431,8 +449,25 @@ async def send_passenger_info(callback_query: types.CallbackQuery):
     user_id = callback_query.from_user.id
     order_id = int(callback_query.data.split("_")[-1])
 
+    # Foydalanuvchini tekshirish
+    user = await db.user.find_unique(where={"telegramId": user_id})
+    if not user:
+        await callback_query.answer(
+            f"❌ Siz botda ro'yxatdan o'tmagansiz. Iltimos, botni ishlatish uchun ro'yxatdan o'ting: {BOT_USERNAME}",
+            show_alert=True
+        )
+        return
+
+    # Faqat DRIVER roliga ega foydalanuvchilarga ruxsat berish
+    if user.role != "DRIVER":
+        await callback_query.answer(
+            "❌ Uzr, bu tugma faqat haydovchilar uchun!",
+            show_alert=True
+        )
+        return
+
+    # Kanal a'zoligini tekshirish
     try:
-        # Kanal a'zoligini tekshirish
         member = await bot.get_chat_member(chat_id=CHANNEL_ID, user_id=user_id)
         if member.status in ["left", "kicked", "restricted"] and user_id != OWNER_ID:
             channel_url = await get_channel_url()
@@ -444,15 +479,6 @@ async def send_passenger_info(callback_query: types.CallbackQuery):
     except Exception as e:
         logging.error(f"Kanalga obunani tekshirishda xatolik: {e}")
         await callback_query.answer("⚠️ Obunani tekshirishda xatolik yuz berdi.", show_alert=True)
-        return
-
-    # Foydalanuvchini tekshirish
-    user = await db.user.find_unique(where={"telegramId": user_id})
-    if not user:
-        await callback_query.answer(
-            f"❌ Siz botda ro'yxatdan o'tmagansiz. Iltimos, botni ishlatish uchun ro'yxatdan o'ting: {BOT_USERNAME}",
-            show_alert=True
-        )
         return
 
     # Buyurtmani olish
@@ -472,14 +498,6 @@ async def send_passenger_info(callback_query: types.CallbackQuery):
         await callback_query.answer("❌ Buyurtma topilmadi yoki allaqachon o'chirilgan.", show_alert=True)
         return
     
-    # Yo'lovchining o'z buyurtmasiga ruxsat
-    if user.role == "PASSENGER" and order.passenger.telegramId != user_id:
-        await callback_query.answer(
-            "⛔️ Siz faqat o'zingizning buyurtmangiz haqida ma'lumot olishingiz mumkin.",
-            show_alert=True
-        )
-        return
-
     current_status = order.status.status if order.status else "initiated"
     
     # Faqat initiated holatidagi buyurtmalarga ruxsat
@@ -546,7 +564,9 @@ async def send_passenger_info(callback_query: types.CallbackQuery):
     
     else:
         # Boshqa statuslar uchun
-        await update_channel_order_status(order, callback_query.message.message_id if hasattr(callback_query, 'message') else None)
+        channel_message_id = order_channel_messages.get(order_id)
+        if channel_message_id:
+            await update_channel_order_status(order, channel_message_id)
         
         status_messages = {
             "canceled": "❌ Buyurtma bekor qilindi! (CANCELED)",
